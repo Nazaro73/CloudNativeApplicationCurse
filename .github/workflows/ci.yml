@@ -115,10 +115,9 @@ jobs:
           "$PWD\sonar-scanner-$scannerVersion-windows-x64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
       - name: SonarCloud Scan
-        shell: powershell
+        shell: cmd
         working-directory: ./backend
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          ..\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat -Dsonar.projectKey=Nazaro73_CloudNativeApplicationCurse -Dsonar.organization=nazaro73 -Dsonar.sources=src -Dsonar.host.url=https://sonarcloud.io -Dsonar.token=$env:SONAR_TOKEN
+          ..\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat -D"sonar.projectKey=Nazaro73_CloudNativeApplicationCurse" -D"sonar.organization=nazaro73" -D"sonar.sources=src" -D"sonar.host.url=https://sonarcloud.io" -D"sonar.token=%SONAR_TOKEN%"
