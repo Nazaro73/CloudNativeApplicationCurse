@@ -238,3 +238,41 @@ This project is licensed under the MIT License.
 ## Support
 
 For support or questions, please open an issue in the repository.
+
+## Git Workflow
+
+### Règles Git
+
+- **Branches principales** : `main`, `develop`
+- **Branches de feature** : `feature/<nom>`
+- **PR obligatoire** vers `develop`
+- **Pas de commit direct** sur `main` ou `develop`
+
+### Convention de commit (Conventional Commits)
+
+Les messages de commit doivent respecter le format suivant :
+
+```
+<type>: <description>
+```
+
+**Types autorisés** :
+- `feat` : nouvelle fonctionnalité
+- `fix` : correction de bug
+- `docs` : documentation
+- `style` : formatage (pas de changement de code)
+- `refactor` : refactoring
+- `test` : ajout de tests
+- `chore` : maintenance
+
+**Exemples** :
+- `feat: ajout de l'authentification`
+- `fix: correction de la connexion Postgres`
+- `chore: mise à jour des dépendances NestJS`
+
+### Hooks Git (Husky)
+
+| Hook | Action |
+|------|--------|
+| `pre-commit` | Lint frontend + backend (via lint-staged) |
+| `commit-msg` | Vérification du format de commit (commitlint) |
