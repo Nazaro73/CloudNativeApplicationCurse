@@ -1,0 +1,31 @@
+{
+  "name": "tp1",
+  "version": "1.0.0",
+  "description": "A complete fullstack gym management application built with modern web technologies.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepare": "husky",
+    "lint:front": "cd frontend && npm run lint",
+    "lint:back": "cd backend && npm run lint",
+    "lint:all": "npm run lint:front && npm run lint:back"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/LargeGaultier/CloudNativeApplicationCurse.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/LargeGaultier/CloudNativeApplicationCurse/issues"
+  },
+  "homepage": "https://github.com/LargeGaultier/CloudNativeApplicationCurse#readme",
+  "devDependencies": {
+    "@commitlint/cli": "^20.2.0",
+    "@commitlint/config-conventional": "^20.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7"
+  }
+}

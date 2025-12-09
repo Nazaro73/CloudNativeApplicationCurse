@@ -1,5 +1,10 @@
 # Gym Management System
 
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=Nazaro73_CloudNativeApplicationCurse&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Nazaro73_CloudNativeApplicationCurse)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=Nazaro73_CloudNativeApplicationCurse&metric=bugs)](https://sonarcloud.io/summary/new_code?id=Nazaro73_CloudNativeApplicationCurse)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=Nazaro73_CloudNativeApplicationCurse&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=Nazaro73_CloudNativeApplicationCurse)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=Nazaro73_CloudNativeApplicationCurse&metric=coverage)](https://sonarcloud.io/summary/new_code?id=Nazaro73_CloudNativeApplicationCurse)
+
 A complete fullstack gym management application built with modern web technologies.
 
 ## Features

@@ -1,0 +1,144 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches: [develop, main, feature/*]
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: self-hosted
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Lint frontend
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Lint backend
+        working-directory: ./backend
+        run: npm run lint
+
+  build:
+    name: Build
+    runs-on: self-hosted
+    needs: lint
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install frontend dependencies
+        working-directory: ./frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Generate Prisma client
+        working-directory: ./backend
+        run: npx prisma generate
+
+  test:
+    name: Tests
+    runs-on: self-hosted
+    needs: build
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install backend dependencies
+        working-directory: ./backend
+        run: npm install
+
+      - name: Generate Prisma client
+        working-directory: ./backend
+        run: npx prisma generate
+
+      - name: Run backend tests
+        working-directory: ./backend
+        run: npm test
+
+  sonarcloud:
+    name: SonarCloud Analysis
+    runs-on: self-hosted
+    needs: test
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Download and setup SonarScanner
+        shell: powershell
+        run: |
+          $scannerVersion = "6.2.1.4610"
+          $scannerUrl = "https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-$scannerVersion-windows-x64.zip"
+          Invoke-WebRequest -Uri $scannerUrl -OutFile sonar-scanner.zip
+          Expand-Archive -Path sonar-scanner.zip -DestinationPath . -Force
+          "$PWD\sonar-scanner-$scannerVersion-windows-x64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: SonarCloud Scan
+        shell: cmd
+        working-directory: ./backend
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ..\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat -D"sonar.projectKey=Nazaro73_CloudNativeApplicationCurse" -D"sonar.organization=nazaro73" -D"sonar.sources=src" -D"sonar.host.url=https://sonarcloud.io" -D"sonar.token=%SONAR_TOKEN%"
+
+      - name: Wait for SonarCloud analysis
+        shell: powershell
+        run: Start-Sleep -Seconds 10
+
+      - name: Check Quality Gate
+        shell: powershell
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:SONAR_TOKEN"
+          }
+          $response = Invoke-RestMethod -Uri "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Nazaro73_CloudNativeApplicationCurse" -Headers $headers
+          $status = $response.projectStatus.status
+          Write-Host "Quality Gate Status: $status"
+          if ($status -ne "OK") {
+            Write-Host "Quality Gate failed!"
+            exit 1
+          }
+          Write-Host "Quality Gate passed!"
