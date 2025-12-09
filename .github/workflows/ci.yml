@@ -142,3 +142,64 @@ jobs:
             exit 1
           }
           Write-Host "Quality Gate passed!"
+
+  docker:
+    name: Docker Build & Push
+    runs-on: self-hosted
+    needs: sonarcloud
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t backend-ci ./backend
+
+      - name: Build frontend image
+        run: docker build -t frontend-ci ./frontend
+
+      - name: Test backend container
+        shell: powershell
+        run: |
+          docker run -d --name backend-test -p 3001:3000 backend-ci
+          Start-Sleep -Seconds 5
+          $response = Invoke-WebRequest -Uri "http://localhost:3001/health" -UseBasicParsing
+          if ($response.StatusCode -eq 200) {
+            Write-Host "Backend healthcheck passed!"
+          } else {
+            Write-Host "Backend healthcheck failed!"
+            exit 1
+          }
+          docker stop backend-test
+          docker rm backend-test
+
+      - name: Test frontend container
+        shell: powershell
+        run: |
+          docker run -d --name frontend-test -p 8081:80 frontend-ci
+          Start-Sleep -Seconds 3
+          $response = Invoke-WebRequest -Uri "http://localhost:8081" -UseBasicParsing
+          if ($response.StatusCode -eq 200) {
+            Write-Host "Frontend healthcheck passed!"
+          } else {
+            Write-Host "Frontend healthcheck failed!"
+            exit 1
+          }
+          docker stop frontend-test
+          docker rm frontend-test
+
+      - name: Login to GHCR
+        run: echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Tag and push backend image
+        run: |
+          docker tag backend-ci ghcr.io/${{ github.repository_owner }}/cloudnative-backend:${{ github.sha }}
+          docker tag backend-ci ghcr.io/${{ github.repository_owner }}/cloudnative-backend:latest
+          docker push ghcr.io/${{ github.repository_owner }}/cloudnative-backend:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/cloudnative-backend:latest
+
+      - name: Tag and push frontend image
+        run: |
+          docker tag frontend-ci ghcr.io/${{ github.repository_owner }}/cloudnative-frontend:${{ github.sha }}
+          docker tag frontend-ci ghcr.io/${{ github.repository_owner }}/cloudnative-frontend:latest
+          docker push ghcr.io/${{ github.repository_owner }}/cloudnative-frontend:${{ github.sha }}
+          docker push ghcr.io/${{ github.repository_owner }}/cloudnative-frontend:latest
