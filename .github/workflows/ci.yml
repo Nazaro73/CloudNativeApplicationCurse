@@ -121,3 +121,24 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
           ..\sonar-scanner-6.2.1.4610-windows-x64\bin\sonar-scanner.bat -D"sonar.projectKey=Nazaro73_CloudNativeApplicationCurse" -D"sonar.organization=nazaro73" -D"sonar.sources=src" -D"sonar.host.url=https://sonarcloud.io" -D"sonar.token=%SONAR_TOKEN%"
+
+      - name: Wait for SonarCloud analysis
+        shell: powershell
+        run: Start-Sleep -Seconds 10
+
+      - name: Check Quality Gate
+        shell: powershell
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          $headers = @{
+            Authorization = "Bearer $env:SONAR_TOKEN"
+          }
+          $response = Invoke-RestMethod -Uri "https://sonarcloud.io/api/qualitygates/project_status?projectKey=Nazaro73_CloudNativeApplicationCurse" -Headers $headers
+          $status = $response.projectStatus.status
+          Write-Host "Quality Gate Status: $status"
+          if ($status -ne "OK") {
+            Write-Host "Quality Gate failed!"
+            exit 1
+          }
+          Write-Host "Quality Gate passed!"
