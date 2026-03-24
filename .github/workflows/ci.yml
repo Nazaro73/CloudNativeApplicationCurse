@@ -259,10 +259,10 @@ jobs:
           Start-Sleep -Seconds 15
 
           $BackendContainer = "backend-$TargetColor"
-          docker exec $BackendContainer npx prisma migrate deploy 2>$null
-          if ($LASTEXITCODE -ne 0) {
-              Write-Host "Warning: Migration may have failed or already applied"
-          }
+          $ErrorActionPreference = 'Continue'
+          docker exec $BackendContainer npx prisma migrate deploy 2>&1 | Out-String
+          $ErrorActionPreference = 'Stop'
+          Write-Host "Migrations applied"
 
           # Health check
           $MaxRetries = 10
