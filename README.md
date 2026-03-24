@@ -228,58 +228,114 @@ docker exec -it gym_db psql -U postgres -d gym_management
 - Monthly billing with no-show penalties
 - Recent booking history
 
-## Deploiement local automatise
+## Deploiement Blue/Green
 
-Le projet inclut un pipeline CI/CD complet avec deploiement automatique.
+Le projet utilise une strategie de deploiement blue/green pour assurer zero downtime.
 
-### Architecture du workflow
+### Architecture
 
 ```
-lint -> build -> test -> sonarcloud -> docker (build & push) -> deploy
+                    ┌─────────────────┐
+                    │     Client      │
+                    └────────┬────────┘
+                             │ :80
+                    ┌────────▼────────┐
+                    │  Reverse Proxy  │
+                    │     (Nginx)     │
+                    └────────┬────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+     ┌────────▼────────┐           ┌────────▼────────┐
+     │      BLUE       │           │      GREEN      │
+     │  (version N)    │           │  (version N+1)  │
+     └────────┬────────┘           └────────┬────────┘
+              │                             │
+              └──────────────┬──────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │    PostgreSQL   │
+                    └─────────────────┘
 ```
 
-### Fonctionnement du stage de deploiement
+### Principe
 
-Le stage `deploy` est execute automatiquement apres la publication des images Docker sur GHCR (GitHub Container Registry). Il effectue les operations suivantes :
+- **Blue** = version actuellement en production
+- **Green** = nouvelle version a deployer (ou inverse)
+- Le reverse proxy route le trafic vers la version active
+- Bascule instantanee sans interruption de service
+- Rollback immediat en cas de probleme
 
-1. **Arret des conteneurs** : `docker compose down` (sans options destructrices)
-2. **Pull des nouvelles images** : Recuperation des images depuis GHCR avec le tag du commit
-3. **Demarrage des conteneurs** : `docker compose up -d` avec les nouvelles images
-4. **Migration de la base** : Application des migrations Prisma
+### Pipeline CI/CD
+
+```
+lint -> build -> test -> sonarcloud -> docker -> deploy-blue-green
+```
+
+### Deroulement d'un deploiement
+
+1. **Build & Push** : Construction et publication des images sur GHCR
+2. **Detection** : Lecture de la couleur active actuelle
+3. **Deploiement** : Lancement de la nouvelle version sur la couleur inactive
+4. **Health check** : Verification que la nouvelle version repond
+5. **Bascule** : Mise a jour du reverse proxy vers la nouvelle couleur
+6. **Disponible** : Rollback possible vers l'ancienne version
+
+### Fichiers Docker Compose
+
+| Fichier | Description |
+|---------|-------------|
+| `docker-compose.base.yml` | PostgreSQL + Reverse Proxy |
+| `docker-compose.blue.yml` | Backend + Frontend (blue) |
+| `docker-compose.green.yml` | Backend + Frontend (green) |
+
+### Commandes utiles
+
+**Deployer manuellement (blue/green automatique) :**
+```powershell
+.\scripts\deploy-blue-green.ps1 -ImageTag "latest"
+```
+
+**Basculer manuellement vers une couleur :**
+```powershell
+.\scripts\switch-color.ps1 -Color blue   # ou green
+```
+
+**Verifier la couleur active :**
+```bash
+curl http://localhost/status
+```
 
 ### Pre-requis
 
 - **Runner local actif** : Le runner GitHub Actions self-hosted doit etre demarre
 - **Secrets configures** : `GITHUB_TOKEN` pour l'acces au registre GHCR
 - **Docker Desktop** : Doit etre lance sur la machine du runner
+- **Port 80 disponible** : Pour le reverse proxy
 
 ### Branches avec deploiement actif
 
-Le deploiement automatique s'execute sur :
 - `main` - Branche principale de production
 - `develop` - Branche de developpement
 - `feature/*` - Branches de fonctionnalites
 
-### Scripts de deploiement manuel
+### Rollback
 
-Des scripts sont disponibles pour un deploiement manuel si necessaire :
+En cas de probleme avec la nouvelle version :
 
-**PowerShell (Windows):**
 ```powershell
-.\scripts\deploy.ps1 -ImageTag "latest"
+# Revenir a la version precedente
+.\scripts\switch-color.ps1 -Color blue  # ou green selon le cas
 ```
 
-**Bash (Linux/Mac):**
-```bash
-./scripts/deploy.sh latest
-```
+Le rollback est instantane (< 1 seconde).
 
 ### Idempotence
 
 Le deploiement est idempotent :
 - Peut etre execute plusieurs fois sans erreur
-- Les volumes PostgreSQL sont preserves (pas de perte de donnees)
-- Les conteneurs sont recrees proprement a chaque deploiement
+- Les volumes PostgreSQL sont preserves
+- Les deux versions coexistent jusqu'a validation
 
 ## Contributing
 
