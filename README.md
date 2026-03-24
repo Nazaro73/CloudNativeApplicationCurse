@@ -228,6 +228,59 @@ docker exec -it gym_db psql -U postgres -d gym_management
 - Monthly billing with no-show penalties
 - Recent booking history
 
+## Deploiement local automatise
+
+Le projet inclut un pipeline CI/CD complet avec deploiement automatique.
+
+### Architecture du workflow
+
+```
+lint -> build -> test -> sonarcloud -> docker (build & push) -> deploy
+```
+
+### Fonctionnement du stage de deploiement
+
+Le stage `deploy` est execute automatiquement apres la publication des images Docker sur GHCR (GitHub Container Registry). Il effectue les operations suivantes :
+
+1. **Arret des conteneurs** : `docker compose down` (sans options destructrices)
+2. **Pull des nouvelles images** : Recuperation des images depuis GHCR avec le tag du commit
+3. **Demarrage des conteneurs** : `docker compose up -d` avec les nouvelles images
+4. **Migration de la base** : Application des migrations Prisma
+
+### Pre-requis
+
+- **Runner local actif** : Le runner GitHub Actions self-hosted doit etre demarre
+- **Secrets configures** : `GITHUB_TOKEN` pour l'acces au registre GHCR
+- **Docker Desktop** : Doit etre lance sur la machine du runner
+
+### Branches avec deploiement actif
+
+Le deploiement automatique s'execute sur :
+- `main` - Branche principale de production
+- `develop` - Branche de developpement
+- `feature/*` - Branches de fonctionnalites
+
+### Scripts de deploiement manuel
+
+Des scripts sont disponibles pour un deploiement manuel si necessaire :
+
+**PowerShell (Windows):**
+```powershell
+.\scripts\deploy.ps1 -ImageTag "latest"
+```
+
+**Bash (Linux/Mac):**
+```bash
+./scripts/deploy.sh latest
+```
+
+### Idempotence
+
+Le deploiement est idempotent :
+- Peut etre execute plusieurs fois sans erreur
+- Les volumes PostgreSQL sont preserves (pas de perte de donnees)
+- Les conteneurs sont recrees proprement a chaque deploiement
+
 ## Contributing
 
 1. Fork the repository

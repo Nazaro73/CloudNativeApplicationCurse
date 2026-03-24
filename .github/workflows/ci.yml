@@ -191,3 +191,53 @@ jobs:
           docker tag frontend-ci ghcr.io/nazaro73/cloudnative-frontend:latest
           docker push ghcr.io/nazaro73/cloudnative-frontend:${{ github.sha }}
           docker push ghcr.io/nazaro73/cloudnative-frontend:latest
+
+  deploy:
+    name: Deploy
+    runs-on: self-hosted
+    needs: docker
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy application
+        shell: powershell
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          Write-Host "Starting deployment with image tag: $env:IMAGE_TAG"
+
+          # Stop existing containers (without removing volumes)
+          Write-Host "Stopping existing containers..."
+          docker compose -f docker-compose.prod.yml down
+
+          # Pull latest images
+          Write-Host "Pulling latest images..."
+          docker pull ghcr.io/nazaro73/cloudnative-backend:$env:IMAGE_TAG
+          docker pull ghcr.io/nazaro73/cloudnative-frontend:$env:IMAGE_TAG
+
+          # Start containers with new images
+          Write-Host "Starting containers..."
+          docker compose -f docker-compose.prod.yml up -d
+
+          # Wait for services to be ready
+          Write-Host "Waiting for services to be ready..."
+          Start-Sleep -Seconds 15
+
+          # Run database migrations
+          Write-Host "Running database migrations..."
+          docker exec backend npx prisma migrate deploy
+
+          # Verify deployment
+          Write-Host "Verifying deployment..."
+          docker ps --filter "name=postgres" --filter "name=backend" --filter "name=frontend"
+
+          Write-Host "Deployment complete!"
