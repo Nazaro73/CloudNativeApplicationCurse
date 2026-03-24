@@ -337,6 +337,55 @@ Le deploiement est idempotent :
 - Les volumes PostgreSQL sont preserves
 - Les deux versions coexistent jusqu'a validation
 
+## Monitoring & Observabilite
+
+Le projet inclut une stack de monitoring complete basee sur Prometheus, Grafana et Loki.
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      GRAFANA (:3001)                            │
+│                  Visualisation & Dashboards                     │
+└─────────────────────┬───────────────────────┬───────────────────┘
+                      │                       │
+                      ▼                       ▼
+┌─────────────────────────────┐   ┌───────────────────────────────┐
+│     PROMETHEUS (:9090)      │   │          LOKI (:3100)         │
+│   Stockage des metriques    │   │     Stockage des logs         │
+└─────────────────────────────┘   └───────────────────────────────┘
+```
+
+### Demarrage de la stack monitoring
+
+```bash
+# Lancer la stack monitoring
+docker compose -f docker-compose.monitoring.yml up -d
+
+# Verifier les services
+docker ps --filter "name=prometheus" --filter "name=grafana" --filter "name=loki"
+```
+
+### Acces aux interfaces
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| Grafana | http://localhost:3001 | admin / admin |
+| Prometheus | http://localhost:9090 | - |
+| Metrics Backend | http://localhost:3000/metrics | - |
+
+### Metriques exposees
+
+Le backend expose les metriques suivantes sur `/metrics` :
+- `http_requests_total` : Nombre total de requetes HTTP
+- `http_request_duration_seconds` : Duree des requetes
+- `gym_backend_process_cpu_seconds_total` : Utilisation CPU
+- `gym_backend_nodejs_eventloop_lag_seconds` : Lag de l'event loop
+
+### Documentation complete
+
+Voir [MONITORING.md](MONITORING.md) pour la documentation detaillee.
+
 ## Contributing
 
 1. Fork the repository
