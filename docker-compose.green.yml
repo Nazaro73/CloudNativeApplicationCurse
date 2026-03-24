@@ -32,5 +32,4 @@ services:
 
 networks:
   app-network:
-    external: true
     name: tp1_app-network
