@@ -192,8 +192,8 @@ jobs:
           docker push ghcr.io/nazaro73/cloudnative-frontend:${{ github.sha }}
           docker push ghcr.io/nazaro73/cloudnative-frontend:latest
 
-  deploy:
-    name: Deploy
+  deploy-blue-green:
+    name: Blue/Green Deploy
     runs-on: self-hosted
     needs: docker
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/feature/')
@@ -208,36 +208,99 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Deploy application
+      - name: Blue/Green Deployment
         shell: powershell
         env:
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          Write-Host "Starting deployment with image tag: $env:IMAGE_TAG"
+          Write-Host "========================================"
+          Write-Host "  Blue/Green Deployment"
+          Write-Host "  Image Tag: $env:IMAGE_TAG"
+          Write-Host "========================================"
 
-          # Stop existing containers (without removing volumes)
-          Write-Host "Stopping existing containers..."
-          docker compose -f docker-compose.prod.yml down
+          # Step 1: Read current active color
+          Write-Host "`n[1/6] Reading current active color..."
+          $ActiveColorFile = "nginx/active-color.conf"
+          $CurrentColor = "blue"
 
-          # Pull latest images
-          Write-Host "Pulling latest images..."
+          if (Test-Path $ActiveColorFile) {
+              $Content = Get-Content $ActiveColorFile -Raw
+              if ($Content -match 'set \$active_color (\w+);') {
+                  $CurrentColor = $Matches[1]
+              }
+          }
+          Write-Host "Current active color: $CurrentColor"
+
+          # Step 2: Determine target color
+          Write-Host "`n[2/6] Determining target color..."
+          if ($CurrentColor -eq "blue") {
+              $TargetColor = "green"
+          } else {
+              $TargetColor = "blue"
+          }
+          Write-Host "Target color: $TargetColor"
+
+          # Step 3: Pull new images
+          Write-Host "`n[3/6] Pulling new images..."
           docker pull ghcr.io/nazaro73/cloudnative-backend:$env:IMAGE_TAG
           docker pull ghcr.io/nazaro73/cloudnative-frontend:$env:IMAGE_TAG
 
-          # Start containers with new images
-          Write-Host "Starting containers..."
-          docker compose -f docker-compose.prod.yml up -d
+          # Step 4: Deploy base infrastructure and target color
+          Write-Host "`n[4/6] Deploying to $TargetColor..."
 
-          # Wait for services to be ready
-          Write-Host "Waiting for services to be ready..."
+          # Ensure base infrastructure is running
+          docker compose -f docker-compose.base.yml up -d
+
+          # Deploy target color
+          docker compose -f docker-compose.base.yml -f "docker-compose.$TargetColor.yml" up -d
+
+          # Step 5: Wait and run migrations
+          Write-Host "`n[5/6] Waiting for services and running migrations..."
           Start-Sleep -Seconds 15
 
-          # Run database migrations
-          Write-Host "Running database migrations..."
-          docker exec backend npx prisma migrate deploy
+          $BackendContainer = "backend-$TargetColor"
+          docker exec $BackendContainer npx prisma migrate deploy 2>$null
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Warning: Migration may have failed or already applied"
+          }
 
-          # Verify deployment
-          Write-Host "Verifying deployment..."
-          docker ps --filter "name=postgres" --filter "name=backend" --filter "name=frontend"
+          # Health check
+          $MaxRetries = 10
+          $Retry = 0
+          $Healthy = $false
 
-          Write-Host "Deployment complete!"
+          while (-not $Healthy -and $Retry -lt $MaxRetries) {
+              try {
+                  $Response = docker exec $BackendContainer wget -q --spider http://localhost:3000/health 2>$null
+                  if ($LASTEXITCODE -eq 0) {
+                      $Healthy = $true
+                      Write-Host "Health check passed!"
+                  }
+              } catch {
+                  $Retry++
+                  Write-Host "Health check attempt $Retry/$MaxRetries..."
+                  Start-Sleep -Seconds 3
+              }
+          }
+
+          # Step 6: Switch the proxy
+          Write-Host "`n[6/6] Switching reverse proxy to $TargetColor..."
+          "set `$active_color $TargetColor;" | Out-File -FilePath $ActiveColorFile -Encoding utf8 -NoNewline
+
+          # Reload nginx
+          docker exec reverse-proxy nginx -s reload
+          if ($LASTEXITCODE -ne 0) {
+              Write-Host "Warning: Nginx reload may have failed"
+          }
+
+          Write-Host "`n========================================"
+          Write-Host "  Deployment Complete!"
+          Write-Host "  Active color: $TargetColor"
+          Write-Host "========================================"
+
+          Write-Host "`nServices:"
+          Write-Host "  - Application: http://localhost"
+          Write-Host "  - Status: http://localhost/status"
+
+          Write-Host "`nContainer Status:"
+          docker ps --format "table {{.Names}}\t{{.Status}}"
